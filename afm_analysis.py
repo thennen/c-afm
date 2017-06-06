@@ -64,6 +64,8 @@ def plot_cafm(data):
     im1 = ax1.imshow(corrZ, cmap=topo_cm, vmin=p1, vmax=p99, extent=(left, right, bottom, top))
     ax1.set_xlabel('X [nm]')
     ax1.set_ylabel('Y [nm]')
+    ax1.set_title('Sample: {},  Folder: {},  id: {}'.format(I['sample_name'], I['folder'], I['id']))
+    ax2.set_title('Tip voltage: {} V'.format(I['voltage']))
     fig.colorbar(im1, ax=ax1, label='Height [nm]')
     # Plot current image
     Idata
@@ -87,39 +89,10 @@ def fitplane(Z):
     plane = np.reshape(np.dot(XX, theta), (m, n))
     return plane
 
-def frames_to_mp4(directory, prefix='Loop', outname='out'):
-    # Send command to create video with ffmpeg
-    cmd = (r'cd "{}" & ffmpeg -framerate 10 -i {}%03d.png -c:v libx264 '
-            '-r 15 -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" '
-            '{}.mp4; pause').format(directory, prefix, outname)
-    os.system(cmd)
-
-interesting = df[(df.id == '23_1') & (df.folder == '31-May-2017')]
-interestingZ = interesting.iloc[0]
-Zdata = interestingZ['scan']
-corrzdata = 1e9 * (Zdata - fitplane(Zdata))
-def rotatingvideo(image):
-    # Make a sweet ass rotating 3d surface plot with mayavi
-    from mayavi import mlab
-    fig1 = mlab.figure(bgcolor=(1,1,1), size=(800, 400))
-    # I don't think this makes it any faster
-    #fig1.scene.off_screen_rendering = True
-    # Probably messing up dimensions again.
-    h, w = np.shape(image)
-    x = np.arange(h)
-    y = np.arange(w)
-    mlab.surf(x, y, image, warp_scale=1)
-    mlab.view(elevation=80, distance='auto')
-    for i in range(360):
-        fig1.scene.camera.azimuth(1)
-        fig1.scene.save_png('anim/anim{:03d}.png'.format(i))
-    frames_to_mp4('anim', 'anim')
-
-
 
 if __name__ == '__main__':
     # Make nice subplots of each scan (that has aspect ratio close to 1)
-    for folder, folderdata in df.groupby('folder'):
+    for folder, folderdata in df[df['type'] == 'xy'].groupby('folder'):
         plotfolder = os.path.join(folder, 'subplots')
         if not os.path.isdir(plotfolder):
             os.makedirs(plotfolder)
@@ -137,7 +110,60 @@ if __name__ == '__main__':
                 fig.savefig(savepath, bbox_inches=0)
                 plt.close(fig)
 
+    # Scatter height vs current
+    for folder, folderdata in df[df['type'] == 'xy'].groupby('folder'):
+        scatterfolder = os.path.join(folder, 'height_current_scatter')
+        if not os.path.isdir(scatterfolder):
+            os.makedirs(scatterfolder)
+        for id, data in folderdata.groupby('id'):
+            h, w = np.shape(data.iloc[0]['scan'])
+            if w != 0:
+                ratio = float(h)/w
+            else: ratio = 0
+            if 0.8 < ratio < 1.2:
+                fig, ax = plt.subplots()
+                I = data[data['channel_name'] == 'I'].iloc[0]['scan'] * 1e9
+                Z = data[data['channel_name'] == 'Z'].iloc[0]['scan'] * 1e9
+                Z = Z - fitplane(Z)
+                ax.scatter(I.flatten(), Z.flatten(), alpha=.1)
+                ax.set_xlabel('Current [nA]')
+                ax.set_ylabel('Height [nm]')
+                #Just use the ID as a file name
+                fn = id
+                ax.set_title('{}, {}'.format(folder, id))
+                savepath = os.path.join(scatterfolder, fn)
+                fig.savefig(savepath, bbox_inches=0)
+                plt.close(fig)
+
+
+    # hexbin height vs current
+    for folder, folderdata in df[df['type'] == 'xy'].groupby('folder'):
+        scatterfolder = os.path.join(folder, 'height_current_hexbin')
+        if not os.path.isdir(scatterfolder):
+            os.makedirs(scatterfolder)
+        for id, data in folderdata.groupby('id'):
+            h, w = np.shape(data.iloc[0]['scan'])
+            if w != 0:
+                ratio = float(h)/w
+            else: ratio = 0
+            if 0.8 < ratio < 1.2:
+                fig, ax = plt.subplots()
+                I = data[data['channel_name'] == 'I'].iloc[0]['scan'] * 1e9
+                Z = data[data['channel_name'] == 'Z'].iloc[0]['scan'] * 1e9
+                Z = Z - fitplane(Z)
+                hex = ax.hexbin(I.flatten(), Z.flatten(), bins='log')
+                fig.colorbar(hex, label='log10(count)')
+                ax.set_xlabel('Current [nA]')
+                ax.set_ylabel('Height [nm]')
+                #Just use the ID as a file name
+                fn = id
+                ax.set_title('{}, {}'.format(folder, id))
+                savepath = os.path.join(scatterfolder, fn)
+                fig.savefig(savepath, bbox_inches=0)
+                plt.close(fig)
+
     # Make plot of scan locations.  I don't know why, I just thought it would be cool.
+    # Might be useful to annotate them with the measurement id
     from matplotlib import patches
     for folder, folderdata in df.groupby('folder'):
         topo = folderdata[folderdata.channel_name == 'Z']
