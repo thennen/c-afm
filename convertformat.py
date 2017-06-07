@@ -59,6 +59,7 @@ def getdata(fn, folder=''):
         dataout['y_offset'] = datain['y_offset']
         dataout['x_offset'] = datain['x_offset']
         dataout['voltage'] = mtrx_data.param['EEPA::GapVoltageControl.Voltage'][0]
+        dataout['aspect'] = dataout['width'] / dataout['height']
         if len(traces) > 1:
             # Get the next trace.
             im2, message = mtrx_data.select_image(traces[1])
@@ -76,6 +77,10 @@ def getdata(fn, folder=''):
         dataout['id'] = ''
     else:
         dataout['id'] = match.group(1)
+    # This will raise a big fat error if it didn't find the file id in the filename.  Sorry.
+    run, cycle = dataout['id'].split('_')
+    dataout['run'] = run
+    dataout['cycle'] = cycle
     dataout['channel_name'] = mtrx_data.channel_name
     dataout['filename'] = fn
     dataout['folder'] = folder
@@ -158,7 +163,7 @@ for folder in folders:
 
     # Dump pngs for data files containing a matrix
     # Dump pickles of figs too
-    pngfolder = os.path.join(folder, 'png')
+    pngfolder = os.path.join(folder, 'raw_png')
     figfolder = os.path.join(folder, 'figs')
     if not os.path.isdir(pngfolder):
         os.makedirs(pngfolder)
