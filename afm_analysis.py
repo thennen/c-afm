@@ -2,14 +2,30 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import os
+import sys
 
 # Just plopping down some code fragments
 
 df = pd.read_pickle('all_lcafm_data.pd')
+
+def fitplane(Z):
+    # Plane Regression -- basically took this from online somewhere
+    # probably I messed up the dimensions as usual
+    m, n = np.shape(Z)
+    X, Y = np.meshgrid(np.arange(m), np.arange(n))
+    XX = np.hstack((np.reshape(X, (m*n, 1)) , np.reshape(Y, (m*n, 1)) ) )
+    XX = np.hstack((np.ones((m*n, 1)), XX))
+    ZZ = np.reshape(Z, (m*n, 1))
+    theta = np.dot(np.dot(np.linalg.pinv(np.dot(XX.transpose(), XX)), XX.transpose()), ZZ)
+    plane = np.reshape(np.dot(XX, theta), (m, n))
+    return plane
+
+
 # Subtract a plane from topography so you don't have to keep doing it later
 def correcttopo(series):
     if series['channel_name'] == 'Z':
         series['corrscan'] = 1e9 * series['scan'] - fitplane(series['scan'])
+        series['corrscan2'] = 1e9 * series['scan2'] - fitplane(series['scan2'])
         return series
     else: return series
 df = df.apply(correcttopo, 1)
@@ -48,7 +64,7 @@ for k,g in df.groupby('filename'):
             plt.savefig(k)
 '''
 
-def plot_cafm(data):
+def plot_cafm(data, n=1):
     # Data should be a dataframe with one of type 'I' and one of type 'Z'
     # This makes a plot of topography next to current
     topo_cm = 'viridis'
@@ -62,17 +78,22 @@ def plot_cafm(data):
     right = I['width'] * 1e9
     bottom = 0
     top = I['height'] * 1e9
-    Idata = I['scan']
-    Zdata = Z['scan']
-    # Correct the Z data
-    subZ = Zdata - fitplane(Zdata)
-    corrZ = 1e9 * (subZ - np.min(subZ))
+    if n==1:
+        Idata = I['scan']
+        Zdata = Z['corrscan']
+    elif n==2:
+        Idata = I['scan2']
+        Zdata = Z['corrscan2']
     # Plot topography image
-    p1, p99 = np.percentile(corrZ, (0.2, 99.8))
-    im1 = ax1.imshow(corrZ, cmap=topo_cm, vmin=p1, vmax=p99, extent=(left, right, bottom, top))
+    p1, p99 = np.percentile(Zdata, (0.2, 99.8))
+    im1 = ax1.imshow(Zdata, cmap=topo_cm, vmin=p1, vmax=p99, extent=(left, right, bottom, top))
     ax1.set_xlabel('X [nm]')
     ax1.set_ylabel('Y [nm]')
-    ax1.set_title('Sample: {},  Folder: {},  id: {}'.format(I['sample_name'], I['folder'], I['id']))
+    title = 'Sample: {},  Folder: {},  id: {}'.format(I['sample_name'], I['folder'], I['id'])
+    if n == 2:
+        # Indicate that it's the reverse scan
+        title += '_r'
+    ax1.set_title(title)
     ax2.set_title('Tip voltage: {} V'.format(I['voltage']))
     fig.colorbar(im1, ax=ax1, label='Height [nm]')
     # Plot current image
@@ -84,6 +105,49 @@ def plot_cafm(data):
     fig.colorbar(im2, ax=ax2, label='Current [nA]')
     return fig
 
+def grad_scatter(data, n=1):
+    fig = plt.figure(figsize=(10,10))
+    ax = plt.subplot(polar=True)
+    if n == 1:
+        I = data[data['channel_name'] == 'I'].iloc[0]['scan'] * 1e9
+        Z = data[data['channel_name'] == 'Z'].iloc[0]['corrscan']
+    elif n == 2:
+        I = data[data['channel_name'] == 'I'].iloc[0]['scan2'] * 1e9
+        Z = data[data['channel_name'] == 'Z'].iloc[0]['corrscan2']
+    gradx, grady = np.gradient(Z)
+    angle = np.arctan2(grady, gradx).flatten()
+    magn = np.sqrt(gradx**2 + grady**2).flatten()
+    Iflat = I.flatten()
+    #sc = ax.scatter(angle, magn, c=Iflat, s=10, alpha=.2, edgecolor='none', cmap='rainbow')
+    # Scattering all of the points washes out the less frequent points.  Need to normalize number of data points by the histogram
+    Irange = np.percentile(I, (.1, 99.9))
+    hist, bins = np.histogram(I.flatten(), range=Irange, bins=50)
+    # For each bin, if the number of data points is over a certain percentage of the total data, take a random sample
+    scatterangle = []
+    scattermagn = []
+    scatterI = []
+    for i, hi in enumerate(hist):
+        p = 0.1
+        binmax = int(p * h * w)
+        mask = (Iflat <= bins[i+1]) & (Iflat >= bins[i])
+        ang = angle[mask]
+        mag = magn[mask]
+        curr = Iflat[mask]
+        inds = range(len(ang))
+        if hi > binmax:
+            inds = np.random.choice(inds, binmax, replace=False)
+        scatterangle.extend(ang[inds])
+        scattermagn.extend(mag[inds])
+        scatterI.extend(curr[inds])
+    sc = ax.scatter(scatterangle, scattermagn, c=scatterI, s=10, alpha=.8, edgecolor='none', cmap='rainbow')
+
+    ax.set_rlim(0, np.percentile(magn, 99))
+    #ax.set_rlabel_position(10)
+    cb = colorbar(sc, label='c-afm current [nA]')
+    cb.set_alpha(1)
+    cb.draw_all()
+    return fig, ax
+
 
 def plot_cafm_hist(data):
     # Data should be a dataframe with one of type 'I' and one of type 'Z'
@@ -94,13 +158,11 @@ def plot_cafm_hist(data):
     Z = data[data['channel_name'] == 'Z'].iloc[0]
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(22.5,8))
     Idata = I['scan']
-    Zdata = Z['scan']
+    Zdata = Z['corrscan']
     # Correct the Z data
-    subZ = Zdata - fitplane(Zdata)
-    corrZ = 1e9 * (subZ - np.min(subZ))
     # Make height histogram
-    p1, p99 = np.percentile(corrZ, (0.2, 99.8))
-    hist1 = ax1.hist(corrZ.flatten(), bins=100, range=(p1, p99), color='ForestGreen')
+    p1, p99 = np.percentile(Zdata, (0.2, 99.8))
+    hist1 = ax1.hist(Zdata.flatten(), bins=100, range=(p1, p99), color='ForestGreen')
     ax1.set_xlabel('Height [nm]')
     ax1.set_ylabel('Pixel Count')
     ax1.set_title('Sample: {},  Folder: {},  id: {}'.format(I['sample_name'], I['folder'], I['id']))
@@ -113,22 +175,16 @@ def plot_cafm_hist(data):
     return fig
 
 
-def fitplane(Z):
-    # Plane Regression -- basically took this from online somewhere
-    # probably I messed up the dimensions as usual
-    m, n = np.shape(Z)
-    X, Y = np.meshgrid(np.arange(m), np.arange(n))
-    XX = np.hstack((np.reshape(X, (m*n, 1)) , np.reshape(Y, (m*n, 1)) ) )
-    XX = np.hstack((np.ones((m*n, 1)), XX))
-    ZZ = np.reshape(Z, (m*n, 1))
-    theta = np.dot(np.dot(np.linalg.pinv(np.dot(XX.transpose(), XX)), XX.transpose()), ZZ)
-    plane = np.reshape(np.dot(XX, theta), (m, n))
-    return plane
-
-
 if __name__ == '__main__':
+    # You can pass a set of folders to analyze, or else the script will do them all
+    if len(sys.argv) > 1:
+        folders = sys.argv[1:]
+    else:
+        folders = df['folder'].unique()
     # Make nice subplots of each scan (that has aspect ratio close to 1)
-    for folder, folderdata in df[df['type'] == 'xy'].groupby('folder'):
+    are_scans = df['type'] == 'xy'
+    in_folders =  df['folder'].isin(folders)
+    for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
         plotfolder = os.path.join(folder, 'subplots')
         if not os.path.isdir(plotfolder):
             os.makedirs(plotfolder)
@@ -138,16 +194,21 @@ if __name__ == '__main__':
                 ratio = float(h)/w
             else: ratio = 0
             if 0.8 < ratio < 1.2:
-                fig = plot_cafm(data)
+                fig = plot_cafm(data, n=1)
+                fig2 = plot_cafm(data, n=2)
                 #fn = os.path.splitext(data.iloc[0]['filename'])[0]
                 #Just use the ID as a file name
                 fn = id
                 savepath = os.path.join(plotfolder, fn)
                 fig.savefig(savepath, bbox_inches=0)
+                print('Wrote {}.png'.format(savepath))
+                fig2.savefig(savepath + '_r')
+                print('Wrote {}_r.png'.format(savepath))
                 plt.close(fig)
+                plt.close(fig2)
 
     # Scatter height vs current
-    for folder, folderdata in df[df['type'] == 'xy'].groupby('folder'):
+    for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
         scatterfolder = os.path.join(folder, 'height_current_scatter')
         if not os.path.isdir(scatterfolder):
             os.makedirs(scatterfolder)
@@ -169,11 +230,12 @@ if __name__ == '__main__':
                 ax.set_title('{}, {}'.format(folder, id))
                 savepath = os.path.join(scatterfolder, fn)
                 fig.savefig(savepath, bbox_inches=0)
+                print('Wrote {}.png'.format(savepath))
                 plt.close(fig)
 
 
     # hexbin height vs current
-    for folder, folderdata in df[df['type'] == 'xy'].groupby('folder'):
+    for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
         scatterfolder = os.path.join(folder, 'height_current_hexbin')
         if not os.path.isdir(scatterfolder):
             os.makedirs(scatterfolder)
@@ -196,11 +258,12 @@ if __name__ == '__main__':
                 ax.set_title('{}, {}'.format(folder, id))
                 savepath = os.path.join(scatterfolder, fn)
                 fig.savefig(savepath, bbox_inches=0)
+                print('Wrote {}.png'.format(savepath))
                 plt.close(fig)
 
     # Histograms of current
     # Make nice subplots of each scan (that has aspect ratio close to 1)
-    for folder, folderdata in df[df['type'] == 'xy'].groupby('folder'):
+    for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
         plotfolder = os.path.join(folder, 'histograms')
         if not os.path.isdir(plotfolder):
             os.makedirs(plotfolder)
@@ -216,69 +279,37 @@ if __name__ == '__main__':
                 fn = id
                 savepath = os.path.join(plotfolder, fn)
                 fig.savefig(savepath, bbox_inches=0)
+                print('Wrote {}.png'.format(savepath))
                 plt.close(fig)
 
     # Polar plot gradient vs current
     # These take a long time for some reason
-    for folder, folderdata in df[df['type'] == 'xy'].groupby('folder'):
+    for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
         scatterfolder = os.path.join(folder, 'gradient_current_polarscatter')
         if not os.path.isdir(scatterfolder):
             os.makedirs(scatterfolder)
         for id, data in folderdata.groupby('id'):
-            h, w = np.shape(data.iloc[0]['scan'])
-            if w != 0:
-                ratio = float(h)/w
-            else: ratio = 0
-            if 0.8 < ratio < 1.2:
-                fig = plt.figure(figsize=(10,10))
-                ax = plt.subplot(polar=True)
-                I = data[data['channel_name'] == 'I'].iloc[0]['scan'] * 1e9
-                Z = data[data['channel_name'] == 'Z'].iloc[0]['scan'] * 1e9
-                Z = Z - fitplane(Z)
-                gradx, grady = np.gradient(Z)
-                angle = np.arctan2(grady, gradx).flatten()
-                magn = np.sqrt(gradx**2 + grady**2).flatten()
-                Iflat = I.flatten()
-                #sc = ax.scatter(angle, magn, c=Iflat, s=10, alpha=.2, edgecolor='none', cmap='rainbow')
-                # Scattering all of the points washes out the less frequent points.  Need to normalize number of data points by the histogram
-                Irange = np.percentile(I, (.1, 99.9))
-                hist, bins = np.histogram(I.flatten(), range=Irange, bins=50)
-                # For each bin, if the number of data points is over a certain percentage of the total data, take a random sample
-                scatterangle = []
-                scattermagn = []
-                scatterI = []
-                for i, hi in enumerate(hist):
-                    p = 0.1
-                    binmax = int(p * h * w)
-                    mask = (Iflat <= bins[i+1]) & (Iflat >= bins[i])
-                    ang = angle[mask]
-                    mag = magn[mask]
-                    curr = Iflat[mask]
-                    inds = range(len(ang))
-                    if hi > binmax:
-                        inds = np.random.choice(inds, binmax, replace=False)
-                    scatterangle.extend(ang[inds])
-                    scattermagn.extend(mag[inds])
-                    scatterI.extend(curr[inds])
-                sc = ax.scatter(scatterangle, scattermagn, c=scatterI, s=10, alpha=.8, edgecolor='none', cmap='rainbow')
-
-                ax.set_rlim(0, np.percentile(magn, 99))
-                #ax.set_rlabel_position(10)
-                cb = colorbar(sc, label='c-afm current [nA]')
-                cb.set_alpha(1)
-                cb.draw_all()
+            aspect = data.iloc[0]['aspect']
+            if 0.8 < aspect < 1.2:
+                fig1, ax1 = grad_scatter(data, n=1)
+                ax1.set_title('Current vs. Topography gradient: {}, {}'.format(folder, id), y=1.1)
+                fig2, ax2 = grad_scatter(data, n=2)
+                ax2.set_title('Current vs. Topography gradient: {}, {}_r'.format(folder, id), y=1.1)
                 # Save the figure
                 fn = id
-                ax.set_title('Current vs. Topography gradient: {}, {}'.format(folder, id), y=1.1)
                 savepath = os.path.join(scatterfolder, fn)
-                fig.savefig(savepath, bbox_inches=0)
-                plt.close(fig)
+                fig1.savefig(savepath, bbox_inches=0)
+                print('Wrote {}.png'.format(savepath))
+                fig2.savefig(savepath + '_r', bbox_inches=0)
+                print('Wrote {}_r.png'.format(savepath))
+                plt.close(fig1)
+                plt.close(fig2)
 
 
     # Make plot of scan locations.  I don't know why, I just thought it would be cool.
     # Might be useful to annotate them with the measurement id
     from matplotlib import patches
-    for folder, folderdata in df.groupby('folder'):
+    for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
         topo = folderdata[folderdata.channel_name == 'Z']
         fig, ax = plt.subplots()
         miny = 1e6 * np.min(topo.y_offset)

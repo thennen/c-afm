@@ -1,6 +1,8 @@
+# Should use dedicated mayavi environment because of its odd requirements
 import pandas as pd
 import numpy as np
 import os
+import sys
 
 df = pd.read_pickle('all_lcafm_data.pd')
 
@@ -42,7 +44,6 @@ def rotatingvideo(imseries, column='scan', folder='', color=None, nrotations=180
     # I don't think this makes it any faster
     #fig1.scene.off_screen_rendering = True
     # Probably messing up dimensions again.
-    print(np.shape(image))
     h, w = np.shape(image)
     sh = imseries['height'] * 1e9
     sw = imseries['width'] * 1e9
@@ -54,7 +55,11 @@ def rotatingvideo(imseries, column='scan', folder='', color=None, nrotations=180
         color = image
     p1, p99 = np.percentile(color.flatten(), (0.1, 99.9))
     # mesh allows coloring by a different array than the height
-    x, y = np.meshgrid(x, y)
+    y, x = np.meshgrid(y, x)
+    print(np.shape(x))
+    print(np.shape(y))
+    print(np.shape(image))
+    print(np.shape(color))
     mlab.mesh(x, y, warpscale*image, scalars=color, colormap='blue-red', vmin=p1, vmax=p99)
     mlab.view(elevation=70, distance='auto')
     for i in range(nrotations):
@@ -65,6 +70,8 @@ def rotatingvideo(imseries, column='scan', folder='', color=None, nrotations=180
 
 
 if __name__ == '__main__':
+    '''
+    # Detailed movie
     #folder = '31-May-2017'
     #id = '23_1'
     #id = '21_1'
@@ -83,16 +90,24 @@ if __name__ == '__main__':
     animdir = os.path.join(folder, 'animations', id)
     #rotatingvideo(interestingZ, column='corrscan', folder=animdir, color=Idata, warpscale=3)
     #frames_to_mp4(animdir, 'anim')
-
+    '''
 
     # Make a few frames at warpscale 1 for all ~square topography measurements
-    for folder, folderdata in df[df['type'] == 'xy'].groupby('folder'):
-        if folder == '31-May-2017':
-            for id, data in folderdata.groupby('id'):
-                print (data.aspect.iloc[0])
-                if 0.8 < data.aspect.iloc[0] < 1.2:
-                    Zseries = data[data['channel_name'] == 'Z'].iloc[0]
-                    Idata = data[data['channel_name'] == 'I'].iloc[0]['scan']
-                    animdir = os.path.join(folder, 'animations', '{}_warpscale_1'.format(id))
-                    rotatingvideo(Zseries, column='corrscan', nrotations=27, folder=animdir, color=Idata, warpscale=1)
-                    frames_to_mp4(animdir, 'anim')
+    # You can pass a folder to analyze, or else the script will do them all
+    if len(sys.argv) > 1:
+        folders = sys.argv[1:]
+    else:
+        folders = df['folder'].unique()
+    print('Making movies for folders:')
+    print('\n'.join(folders))
+    are_scans = df['type'] == 'xy'
+    in_folders =  df['folder'].isin(folders)
+    for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
+        for id, data in folderdata.groupby('id'):
+            print('Aspect ratio: {}'.format(data.aspect.iloc[0]))
+            if 0.8 < data.aspect.iloc[0] < 1.2:
+                Zseries = data[data['channel_name'] == 'Z'].iloc[0]
+                Idata = data[data['channel_name'] == 'I'].iloc[0]['scan']
+                animdir = os.path.join(folder, 'animations', '{}_warpscale_1'.format(id))
+                rotatingvideo(Zseries, column='corrscan', nrotations=27, folder=animdir, color=Idata, warpscale=1)
+                frames_to_mp4(animdir, 'anim')

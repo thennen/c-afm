@@ -1,16 +1,20 @@
 # Convert all the LCAFM data files to other formats
 # This script will convert from all the folders in the directory it is contained in
+# Run from python2 environment because that's where access2thematrix lives..
 import access2thematrix
 from scipy.io import savemat
 import os
 import sys
 from numpy import savetxt
 import numpy as np
+import matplotlib
+matplotlib.use('Qt4Agg')
 import matplotlib.pyplot as plt
 import pickle
 import pandas as pd
 import time
 import re
+
 
 alldata = pd.DataFrame()
 
@@ -70,15 +74,16 @@ def getdata(fn, folder=''):
     dataout['ctime'] = os.path.getctime(fp)
     dataout['date'] = time.strftime(r'%d.%m.%Y', time.gmtime(dataout['ctime']))
     dataout['sample_name'] = mtrx_data.sample_name
-    # Get the measurement number from out-of-control file name
-    # I found out later that it is elsewhere in the metadata
-    match = re.search('([0-9]+_[0-9]+).', fn)
+    # Get the measurement ID from out-of-control file name
+    # There is a 6 digit number, and two ? digit numbers at the end ...
+    match = re.search('-(\d{6})_.*--([0-9]+)_([0-9]+).', fn)
     if match is None:
+        mystery_id, run, cycle = '', '', ''
         dataout['id'] = ''
     else:
-        dataout['id'] = match.group(1)
-    # This will raise a big fat error if it didn't find the file id in the filename.  Sorry.
-    run, cycle = dataout['id'].split('_')
+        mystery_id, run, cycle = match.groups()
+        dataout['id'] = '_'.join([mystery_id, run, cycle])
+    dataout['mystery_id'] = mystery_id
     dataout['run'] = run
     dataout['cycle'] = cycle
     dataout['channel_name'] = mtrx_data.channel_name
@@ -121,6 +126,27 @@ for folder in folders:
     pdfilename = folder + '.df'
     pdfile = os.path.join(folder, pdfilename)
     df = pd.DataFrame(data.values())
+
+    # Write corrected topography to dataframe as well
+    def fitplane(Z):
+        # Plane Regression -- basically took this from online somewhere
+        # probably I messed up the dimensions as usual
+        m, n = np.shape(Z)
+        X, Y = np.meshgrid(np.arange(m), np.arange(n))
+        XX = np.hstack((np.reshape(X, (m*n, 1)) , np.reshape(Y, (m*n, 1)) ) )
+        XX = np.hstack((np.ones((m*n, 1)), XX))
+        ZZ = np.reshape(Z, (m*n, 1))
+        theta = np.dot(np.dot(np.linalg.pinv(np.dot(XX.transpose(), XX)), XX.transpose()), ZZ)
+        plane = np.reshape(np.dot(XX, theta), (m, n))
+        return plane
+
+    def correcttopo(series):
+        if series['channel_name'] == 'Z':
+            series['corrscan'] = 1e9 * series['scan'] - fitplane(series['scan'])
+            return series
+        else: return series
+    df = df.apply(correcttopo, 1)
+
     df.to_pickle(pdfile)
     print('Wrote file {}'.format(pdfile))
     # It will be useful to group by the filename without extension
@@ -201,7 +227,7 @@ for folder in folders:
             x, y = d['x_offset'], d['y_offset']
             ax.set_title('Location: {} nm, {} nm'.format(x * 1e9, y * 1e9))
             ax.legend(['Up', 'Down'], title='Sweep direction', loc=0)
-        fig.savefig(pngpath, bbox_inches='tight')
+        fig.savefig(pngpath, bbox_inches=0)
         plt.close(fig)
 
 # When done, put dataframe containing all of the data into
