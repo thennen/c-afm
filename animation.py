@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 import sys
+from mayavi import mlab
 
 df = pd.read_pickle('all_lcafm_data.pd')
 
@@ -33,7 +34,23 @@ def fitplane(Z):
     plane = np.reshape(np.dot(XX, theta), (m, n))
     return plane
 
-def rotatingvideo(imseries, column='scan', folder='', color=None, nrotations=180,warpscale=3):
+def sweet3drender():
+    # Test of 3d render
+    imseries = df[df.type == 'xy'].iloc[0]
+    image = imseries['scan']
+    fig1 = mlab.figure(bgcolor=(1,1,1), size=(1200, 600))
+    # Probably messing up dimensions again.
+    h, w = np.shape(image)
+    sh = imseries['height'] * 1e9
+    sw = imseries['width'] * 1e9
+    x = np.linspace(0, sh, h)
+    y = np.linspace(0, sw, w)
+    # Use this if you just want the surface color to represent the height
+    mlab.surf(x, y, image, warp_scale=5)
+    mlab.view(elevation=70, distance='auto')
+    mlab.orientation_axes()
+
+def rotatingvideo(imseries, column='scan', folder='', fnsuffix='anim', color=None, nrotations=180, vmin=None, vmax=None, warpscale=3):
     # Make a sweet ass rotating 3d surface plot with mayavi
     # Pass the pandas series of the scan you want to plot
     from mayavi import mlab
@@ -53,18 +70,24 @@ def rotatingvideo(imseries, column='scan', folder='', color=None, nrotations=180
     #mlab.surf(x, y, image, warp_scale=warpscale)
     if color is None:
         color = image
-    p1, p99 = np.percentile(color.flatten(), (0.1, 99.9))
+    if (vmin is None) and (vmax is None):
+        vmin, vmax = np.percentile(color.flatten(), (0.1, 99.9))
     # mesh allows coloring by a different array than the height
     y, x = np.meshgrid(y, x)
     print(np.shape(x))
     print(np.shape(y))
     print(np.shape(image))
     print(np.shape(color))
-    mlab.mesh(x, y, warpscale*image, scalars=color, colormap='blue-red', vmin=p1, vmax=p99)
+    mesh = mlab.mesh(x, y, warpscale*image, scalars=color, colormap='blue-red', vmin=vmin, vmax=vmax)
     mlab.view(elevation=70, distance='auto')
+    #mlab.orientation_axes()
+    #mlab.axes(mesh, color=(.7, .7, .7), extent=mesh_extent,
+                #ranges=(0, 1, 0, 1, 0, 1), xlabel='', ylabel='',
+                #zlabel='Probability',
+                #x_axis_visibility=True, z_axis_visibility=True)
     for i in range(nrotations):
         fig1.scene.camera.azimuth(360. / nrotations)
-        fp = os.path.join(folder, 'anim{:03d}.png'.format(i))
+        fp = os.path.join(folder, '{:03d}_{}.png'.format(i, fnsuffix))
         fig1.scene.save_png(fp)
     mlab.close()
 
@@ -108,6 +131,11 @@ if __name__ == '__main__':
             if 0.8 < data.aspect.iloc[0] < 1.2:
                 Zseries = data[data['channel_name'] == 'Z'].iloc[0]
                 Idata = data[data['channel_name'] == 'I'].iloc[0]['scan']
-                animdir = os.path.join(folder, 'animations', '{}_warpscale_1'.format(id))
-                rotatingvideo(Zseries, column='corrscan', nrotations=27, folder=animdir, color=Idata, warpscale=1)
-                frames_to_mp4(animdir, 'anim')
+                vmin, vmax = np.percentile(Idata.flatten(), (0.1, 99.9))
+                animdir = os.path.join(folder, 'animations', '{}_warpscale_2'.format(id))
+                rotatingvideo(Zseries, column='corrscan', fnsuffix='Forward', nrotations=27, folder=animdir, color=Idata, vmin=vmin, vmax=vmax, warpscale=2)
+                #frames_to_mp4(animdir, 'Forward')
+
+                # Also write the reverse scan for comparison
+                Idata_r = data[data['channel_name'] == 'I'].iloc[0]['scan2']
+                rotatingvideo(Zseries, column='corrscan2', fnsuffix='Reverse', nrotations=27, folder=animdir, color=Idata_r, warpscale=2)

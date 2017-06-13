@@ -142,7 +142,8 @@ for folder in folders:
 
     def correcttopo(series):
         if series['channel_name'] == 'Z':
-            series['corrscan'] = 1e9 * series['scan'] - fitplane(series['scan'])
+            series['corrscan'] = 1e9 * (series['scan'] - fitplane(series['scan']))
+            series['corrscan2'] = 1e9 * (series['scan2'] - fitplane(series['scan2']))
             return series
         else: return series
     df = df.apply(correcttopo, 1)

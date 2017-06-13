@@ -234,6 +234,77 @@ if __name__ == '__main__':
                 plt.close(fig)
 
 
+    # Not that useful
+    '''
+    # Forward vs backward scans
+    for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
+        topo_dir = os.path.join(folder, 'forward_vs_backward_topo')
+        current_dir = os.path.join(folder, 'forward_vs_backward_current')
+        if not os.path.isdir(topo_dir):
+            os.makedirs(topo_dir)
+        if not os.path.isdir(current_dir):
+            os.makedirs(current_dir)
+        for id, data in folderdata.groupby('id'):
+            h, w = np.shape(data.iloc[0]['scan'])
+            if w != 0:
+                ratio = float(h)/w
+            else: ratio = 0
+            if 0.8 < ratio < 1.2:
+                fig1, (ax11, ax12) = plt.subplots(1, 2, figsize=(22.5,8))
+                fig2, (ax21, ax22) = plt.subplots(1, 2, figsize=(22.5,8))
+
+                topo_cm = 'viridis'
+                current_cm = 'inferno'
+                # Pandas doesn't know this should only have one row, so you need to tell it
+                # to take the 0th row
+                I = data[data['channel_name'] == 'I'].iloc[0]
+                Z = data[data['channel_name'] == 'Z'].iloc[0]
+                left = 0
+                right = I['width'] * 1e9
+                bottom = 0
+                top = I['height'] * 1e9
+                Idata1 = I['scan']
+                Zdata1 = Z['corrscan']
+                Idata2 = I['scan2']
+                Zdata2 = Z['corrscan2']
+                # Plot topography images
+                p1, p99 = np.percentile(Zdata1, (0.2, 99.8))
+                im11 = ax11.imshow(Zdata1, cmap=topo_cm, vmin=p1, vmax=p99, extent=(left, right, bottom, top))
+                im12 = ax12.imshow(Zdata2, cmap=topo_cm, vmin=p1, vmax=p99, extent=(left, right, bottom, top))
+                ax11.set_xlabel('(Forward scan) X [nm]')
+                ax11.set_ylabel('Y [nm]')
+                ax12.set_xlabel('(Reverse scan) X [nm]')
+                ax12.set_ylabel('Y [nm]')
+                title = 'Sample: {},  Folder: {},  id: {}'.format(I['sample_name'], I['folder'], I['id'])
+                ax11.set_title(title)
+                ax12.set_title('Tip voltage: {} V'.format(I['voltage']))
+                fig1.colorbar(im11, ax=ax11, label='Height [nm]')
+                fig1.colorbar(im12, ax=ax12, label='Height [nm]')
+
+                # Plot current images
+                p1, p99 = np.percentile(1e9 * Idata1, (0.2, 99.8))
+                im21 = ax21.imshow(1e9 * Idata1, cmap=current_cm, vmin=p1, vmax=p99, extent=(left, right, bottom, top))
+                im22 = ax22.imshow(1e9 * Idata1, cmap=current_cm, vmin=p1, vmax=p99, extent=(left, right, bottom, top))
+                ax21.set_xlabel('(Forward scan) X [nm]')
+                ax21.set_ylabel('Y [nm]')
+                ax22.set_xlabel('(Reverse scan) X [nm]')
+                ax22.set_ylabel('Y [nm]')
+                fig2.colorbar(im21, ax=ax21, label='Current [nA]')
+                fig2.colorbar(im22, ax=ax22, label='Current [nA]')
+
+                #Just use the ID as a file name
+                fn = id
+                savepath1 = os.path.join(topo_dir, fn)
+                fig1.savefig(savepath1, bbox_inches=0)
+                print('Wrote {}.png'.format(savepath1))
+                savepath2 = os.path.join(current_dir, fn)
+                fig2.savefig(savepath2)
+                print('Wrote {}.png'.format(savepath2))
+                plt.close(fig1)
+                plt.close(fig2)
+    '''
+
+
     # hexbin height vs current
     for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
         scatterfolder = os.path.join(folder, 'height_current_hexbin')
