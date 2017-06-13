@@ -304,7 +304,6 @@ if __name__ == '__main__':
                 plt.close(fig2)
     '''
 
-
     # hexbin height vs current
     for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
         scatterfolder = os.path.join(folder, 'height_current_hexbin')
