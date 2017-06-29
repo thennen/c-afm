@@ -83,9 +83,9 @@ def getdata(fn, folder=''):
     else:
         mystery_id, run, cycle = match.groups()
         dataout['id'] = '_'.join([mystery_id, run, cycle])
-    dataout['mystery_id'] = mystery_id
-    dataout['run'] = run
-    dataout['cycle'] = cycle
+    dataout['mystery_id'] = int(mystery_id)
+    dataout['run'] = int(run)
+    dataout['cycle'] = int(cycle)
     dataout['channel_name'] = mtrx_data.channel_name
     dataout['filename'] = fn
     dataout['folder'] = folder
@@ -189,20 +189,20 @@ for folder in folders:
 
 
     # Dump pngs for data files containing a matrix
-    # Dump pickles of figs too
-    pngfolder = os.path.join(folder, 'raw_png')
-    figfolder = os.path.join(folder, 'figs')
+    # Dump pickles of figs too (disabled)
+    pngfolder = os.path.join(folder, 'raw_xy_scans_png')
     if not os.path.isdir(pngfolder):
         os.makedirs(pngfolder)
-    if not os.path.isdir(figfolder):
-        os.makedirs(figfolder)
+    #figfolder = os.path.join(folder, 'figs')
+    #if not os.path.isdir(figfolder):
+        #os.makedirs(figfolder)
     for d in data.values():
         pngname = d['filename'] + '.png'
         pngpath = os.path.join(pngfolder, pngname)
         if d['type'] == 'xy' and np.shape(d['scan'])[1] > 0:
             # Files have very strange extensions.  Just keep them there.
             figname = d['filename'] + '.plt'
-            figpath = os.path.join(figfolder, figname)
+            #figpath = os.path.join(figfolder, figname)
 
             fig, ax = plt.subplots()
             left = 0

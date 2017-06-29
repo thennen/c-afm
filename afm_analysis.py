@@ -4,7 +4,6 @@ import pandas as pd
 import os
 import sys
 
-# Just plopping down some code fragments
 
 df = pd.read_pickle('all_lcafm_data.pd')
 
@@ -24,8 +23,8 @@ def fitplane(Z):
 # Subtract a plane from topography so you don't have to keep doing it later
 def correcttopo(series):
     if series['channel_name'] == 'Z':
-        series['corrscan'] = 1e9 * series['scan'] - fitplane(series['scan'])
-        series['corrscan2'] = 1e9 * series['scan2'] - fitplane(series['scan2'])
+        series['corrscan'] = 1e9 * (series['scan'] - fitplane(series['scan']))
+        series['corrscan2'] = 1e9 * (series['scan2'] - fitplane(series['scan2']))
         return series
     else: return series
 df = df.apply(correcttopo, 1)
@@ -143,7 +142,7 @@ def grad_scatter(data, n=1):
 
     ax.set_rlim(0, np.percentile(magn, 99))
     #ax.set_rlabel_position(10)
-    cb = colorbar(sc, label='c-afm current [nA]')
+    cb = fig.colorbar(sc, label='c-afm current [nA]')
     cb.set_alpha(1)
     cb.draw_all()
     return fig, ax
@@ -185,7 +184,7 @@ if __name__ == '__main__':
     are_scans = df['type'] == 'xy'
     in_folders =  df['folder'].isin(folders)
     for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
-        plotfolder = os.path.join(folder, 'subplots')
+        plotfolder = os.path.join(folder, 'topo_current_subplots')
         if not os.path.isdir(plotfolder):
             os.makedirs(plotfolder)
         for id, data in folderdata.groupby('id'):
@@ -209,7 +208,7 @@ if __name__ == '__main__':
 
     # Scatter height vs current
     for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
-        scatterfolder = os.path.join(folder, 'height_current_scatter')
+        scatterfolder = os.path.join(folder, 'topo_current_scatter')
         if not os.path.isdir(scatterfolder):
             os.makedirs(scatterfolder)
         for id, data in folderdata.groupby('id'):
@@ -306,7 +305,7 @@ if __name__ == '__main__':
 
     # hexbin height vs current
     for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
-        scatterfolder = os.path.join(folder, 'height_current_hexbin')
+        scatterfolder = os.path.join(folder, 'topo_current_hexbin')
         if not os.path.isdir(scatterfolder):
             os.makedirs(scatterfolder)
         for id, data in folderdata.groupby('id'):
@@ -334,7 +333,7 @@ if __name__ == '__main__':
     # Histograms of current
     # Make nice subplots of each scan (that has aspect ratio close to 1)
     for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
-        plotfolder = os.path.join(folder, 'histograms')
+        plotfolder = os.path.join(folder, 'topo_current_histograms')
         if not os.path.isdir(plotfolder):
             os.makedirs(plotfolder)
         for id, data in folderdata.groupby('id'):
@@ -377,9 +376,13 @@ if __name__ == '__main__':
 
 
     # Make plot of scan locations.  I don't know why, I just thought it would be cool.
-    # Might be useful to annotate them with the measurement id
+    # Might be useful to annotate each region with the measurement id
+    # If you want, you can make a plot for every scan that shows only the previous and next scan areas with low opacity
     from matplotlib import patches
     for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
+        regionsfolder = os.path.join(folder, 'scan_regions')
+        if not os.path.isdir(regionsfolder):
+            os.makedirs(regionsfolder)
         topo = folderdata[folderdata.channel_name == 'Z']
         fig, ax = plt.subplots()
         miny = 1e6 * np.min(topo.y_offset)
@@ -405,4 +408,9 @@ if __name__ == '__main__':
         x = iv['x_offset']
         y = iv['y_offset']
         ax.scatter(x, y, alpha=1, edgecolor='none')
+        # Save to folder
+        savepath = os.path.join(regionsfolder, '{}_all_scan_regions.png'.format(folder))
+        fig.savefig(savepath, bbox_inches=0)
+        print('Wrote {}.png'.format(savepath))
+
 

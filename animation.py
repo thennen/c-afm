@@ -50,7 +50,7 @@ def sweet3drender():
     mlab.view(elevation=70, distance='auto')
     mlab.orientation_axes()
 
-def rotatingvideo(imseries, column='scan', folder='', fnsuffix='anim', color=None, nrotations=180, vmin=None, vmax=None, warpscale=3):
+def rotatingvideo(imseries, column='scan', folder='', fnprefix='', fnsuffix='anim', color=None, nrotations=180, vmin=None, vmax=None, warpscale=3):
     # Make a sweet ass rotating 3d surface plot with mayavi
     # Pass the pandas series of the scan you want to plot
     from mayavi import mlab
@@ -87,7 +87,7 @@ def rotatingvideo(imseries, column='scan', folder='', fnsuffix='anim', color=Non
                 #x_axis_visibility=True, z_axis_visibility=True)
     for i in range(nrotations):
         fig1.scene.camera.azimuth(360. / nrotations)
-        fp = os.path.join(folder, '{:03d}_{}.png'.format(i, fnsuffix))
+        fp = os.path.join(folder, '{}_{:03d}_{}.png'.format(fnprefix, i, fnsuffix))
         fig1.scene.save_png(fp)
     mlab.close()
 
@@ -132,10 +132,12 @@ if __name__ == '__main__':
                 Zseries = data[data['channel_name'] == 'Z'].iloc[0]
                 Idata = data[data['channel_name'] == 'I'].iloc[0]['scan']
                 vmin, vmax = np.percentile(Idata.flatten(), (0.1, 99.9))
-                animdir = os.path.join(folder, 'animations', '{}_warpscale_2'.format(id))
-                rotatingvideo(Zseries, column='corrscan', fnsuffix='Forward', nrotations=27, folder=animdir, color=Idata, vmin=vmin, vmax=vmax, warpscale=2)
+                # This gives each scan its own folder and is annoying
+                #animdir = os.path.join(folder, 'animations', '{}_warpscale_2'.format(id))
+                animdir = os.path.join(folder, '3D_rotations')
+                rotatingvideo(Zseries, column='corrscan', fnprefix=id ,fnsuffix='Forward', nrotations=27, folder=animdir, color=Idata, vmin=vmin, vmax=vmax, warpscale=2)
                 #frames_to_mp4(animdir, 'Forward')
 
                 # Also write the reverse scan for comparison
                 Idata_r = data[data['channel_name'] == 'I'].iloc[0]['scan2']
-                rotatingvideo(Zseries, column='corrscan2', fnsuffix='Reverse', nrotations=27, folder=animdir, color=Idata_r, warpscale=2)
+                rotatingvideo(Zseries, column='corrscan2', fnprefix=id, fnsuffix='Reverse', nrotations=27, folder=animdir, color=Idata_r, warpscale=2)
