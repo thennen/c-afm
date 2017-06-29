@@ -188,11 +188,8 @@ if __name__ == '__main__':
         if not os.path.isdir(plotfolder):
             os.makedirs(plotfolder)
         for id, data in folderdata.groupby('id'):
-            h, w = np.shape(data.iloc[0]['scan'])
-            if w != 0:
-                ratio = float(h)/w
-            else: ratio = 0
-            if 0.8 < ratio < 1.2:
+            aspect = data.iloc[0]['aspect']
+            if 0.6 < aspect < 1.5:
                 fig = plot_cafm(data, n=1)
                 fig2 = plot_cafm(data, n=2)
                 #fn = os.path.splitext(data.iloc[0]['filename'])[0]
@@ -212,11 +209,8 @@ if __name__ == '__main__':
         if not os.path.isdir(scatterfolder):
             os.makedirs(scatterfolder)
         for id, data in folderdata.groupby('id'):
-            h, w = np.shape(data.iloc[0]['scan'])
-            if w != 0:
-                ratio = float(h)/w
-            else: ratio = 0
-            if 0.8 < ratio < 1.2:
+            aspect = data.iloc[0]['aspect']
+            if 0.6 < aspect < 1.5:
                 fig, ax = plt.subplots()
                 I = data[data['channel_name'] == 'I'].iloc[0]['scan'] * 1e9
                 Z = data[data['channel_name'] == 'Z'].iloc[0]['scan'] * 1e9
@@ -309,11 +303,8 @@ if __name__ == '__main__':
         if not os.path.isdir(scatterfolder):
             os.makedirs(scatterfolder)
         for id, data in folderdata.groupby('id'):
-            h, w = np.shape(data.iloc[0]['scan'])
-            if w != 0:
-                ratio = float(h)/w
-            else: ratio = 0
-            if 0.8 < ratio < 1.2:
+            aspect = data.iloc[0]['aspect']
+            if 0.6 < aspect < 1.5:
                 fig, ax = plt.subplots()
                 I = data[data['channel_name'] == 'I'].iloc[0]['scan'] * 1e9
                 Z = data[data['channel_name'] == 'Z'].iloc[0]['scan'] * 1e9
@@ -337,11 +328,8 @@ if __name__ == '__main__':
         if not os.path.isdir(plotfolder):
             os.makedirs(plotfolder)
         for id, data in folderdata.groupby('id'):
-            h, w = np.shape(data.iloc[0]['scan'])
-            if w != 0:
-                ratio = float(h)/w
-            else: ratio = 0
-            if 0.8 < ratio < 1.2:
+            aspect = data.iloc[0]['aspect']
+            if 0.6 < aspect < 1.5:
                 fig = plot_cafm_hist(data)
                 #fn = os.path.splitext(data.iloc[0]['filename'])[0]
                 #Just use the ID as a file name
@@ -359,7 +347,7 @@ if __name__ == '__main__':
             os.makedirs(scatterfolder)
         for id, data in folderdata.groupby('id'):
             aspect = data.iloc[0]['aspect']
-            if 0.8 < aspect < 1.2:
+            if 0.6 < aspect < 1.5:
                 fig1, ax1 = grad_scatter(data, n=1)
                 ax1.set_title('Current vs. Topography gradient: {}, {}'.format(folder, id), y=1.1)
                 fig2, ax2 = grad_scatter(data, n=2)
