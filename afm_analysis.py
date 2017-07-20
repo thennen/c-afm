@@ -4,8 +4,8 @@ import pandas as pd
 import os
 import sys
 
-
-df = pd.read_pickle('all_lcafm_data.pd')
+# Not storing all the data in one file anymore
+#df = pd.read_pickle('all_lcafm_data.pd')
 
 def fitplane(Z):
     # Plane Regression -- basically took this from online somewhere
@@ -20,14 +20,16 @@ def fitplane(Z):
     return plane
 
 
+# Should now be saved this way already
+#
 # Subtract a plane from topography so you don't have to keep doing it later
-def correcttopo(series):
-    if series['channel_name'] == 'Z':
-        series['corrscan'] = 1e9 * (series['scan'] - fitplane(series['scan']))
-        series['corrscan2'] = 1e9 * (series['scan2'] - fitplane(series['scan2']))
-        return series
-    else: return series
-df = df.apply(correcttopo, 1)
+#def correcttopo(series):
+#    if series['channel_name'] == 'Z':
+#        series['corrscan'] = 1e9 * (series['scan'] - fitplane(series['scan']))
+#        series['corrscan2'] = 1e9 * (series['scan2'] - fitplane(series['scan2']))
+#        return series
+#    else: return series
+#df = df.apply(correcttopo, 1)
 
 #niceones = df[df.filename.apply(lambda fn: ('21_1' in fn) and ('May' in fn))]
 '''
@@ -88,6 +90,7 @@ def plot_cafm(data, n=1):
     im1 = ax1.imshow(Zdata, cmap=topo_cm, vmin=p1, vmax=p99, extent=(left, right, bottom, top))
     ax1.set_xlabel('X [nm]')
     ax1.set_ylabel('Y [nm]')
+    ax1.invert_yaxis()
     title = 'Sample: {},  Folder: {},  id: {}'.format(I['sample_name'], I['folder'], I['id'])
     if n == 2:
         # Indicate that it's the reverse scan
@@ -101,6 +104,7 @@ def plot_cafm(data, n=1):
     im2 = ax2.imshow(1e9 * Idata, cmap=current_cm, vmin=p1, vmax=p99, extent=(left, right, bottom, top))
     ax2.set_xlabel('X [nm]')
     ax2.set_ylabel('Y [nm]')
+    ax2.invert_yaxis()
     fig.colorbar(im2, ax=ax2, label='Current [nA]')
     return fig
 
@@ -127,6 +131,7 @@ def grad_scatter(data, n=1):
     scatterI = []
     for i, hi in enumerate(hist):
         p = 0.1
+        h, w = np.shape(I)
         binmax = int(p * h * w)
         mask = (Iflat <= bins[i+1]) & (Iflat >= bins[i])
         ang = angle[mask]
@@ -161,13 +166,13 @@ def plot_cafm_hist(data):
     # Correct the Z data
     # Make height histogram
     p1, p99 = np.percentile(Zdata, (0.2, 99.8))
-    hist1 = ax1.hist(Zdata.flatten(), bins=100, range=(p1, p99), color='ForestGreen')
+    hist1 = ax1.hist(Zdata.flatten(), bins='auto', range=(p1, p99), color='ForestGreen')
     ax1.set_xlabel('Height [nm]')
     ax1.set_ylabel('Pixel Count')
     ax1.set_title('Sample: {},  Folder: {},  id: {}'.format(I['sample_name'], I['folder'], I['id']))
     # Make current histogram
     p1, p99 = np.percentile(Idata, (0.2, 99.8))
-    hist2 = ax2.hist(Idata.flatten(), bins=100, range=(p1, p99), color='Crimson')
+    hist2 = ax2.hist(Idata.flatten(), bins='auto', range=(p1, p99), color='Crimson')
     ax2.set_title('Tip voltage: {} V'.format(I['voltage']))
     ax2.set_xlabel('Current [nA]')
     ax2.set_ylabel('Pixel Count')
@@ -179,7 +184,24 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         folders = sys.argv[1:]
     else:
-        folders = df['folder'].unique()
+        folders = os.listdir(sys.path[0])
+        folders = [f for f in folders if os.path.isdir(f)]
+        # Don't touch folders that have no data files inside of them ...
+        def anydata(folder):
+            dirlist = os.listdir(folder)
+            for fn in dirlist:
+                if fn.endswith('mtrx'): return True
+            return False
+        folders = [f for f in folders if anydata(f)]
+
+    # Construct single dataframe from all the dataframes in the folders
+    # This happens to be less work at the moment
+    # Also allows me to write each plot type in its own loop so it can be copy pasted
+    dfs = []
+    for f in folders:
+        dfs.append(pd.read_pickle(os.path.join(f, f + '.df')))
+    df = pd.concat(dfs)
+
     # Make nice subplots of each scan (that has aspect ratio close to 1)
     are_scans = df['type'] == 'xy'
     in_folders =  df['folder'].isin(folders)
@@ -189,7 +211,7 @@ if __name__ == '__main__':
             os.makedirs(plotfolder)
         for id, data in folderdata.groupby('id'):
             aspect = data.iloc[0]['aspect']
-            if 0.6 < aspect < 1.5:
+            if 0.5 < aspect < 2:
                 fig = plot_cafm(data, n=1)
                 fig2 = plot_cafm(data, n=2)
                 #fn = os.path.splitext(data.iloc[0]['filename'])[0]
