@@ -16,6 +16,8 @@ folders = [f for f in folders if anydata(f)]
 for f in folders:
     source = os.path.join(pwd, f)
     dest = os.path.join('X:\emrl\Pool\Bulletin\Hennen\LCAFM', f)
-    robocmd = 'robocopy \"{}\" \"{}\" /S /MIR /XF *_mtrx *.mtrx'.format(source, dest)
+    # Mirror directory, but exclude original data files and pandas dataframe.
+    # No one understands what that is anyway
+    robocmd = 'robocopy \"{}\" \"{}\" /S /MIR /XF *_mtrx *.mtrx *.df'.format(source, dest)
     #print(robocmd)
     os.system(robocmd)

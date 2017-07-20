@@ -199,13 +199,16 @@ if __name__ == '__main__':
     # Also allows me to write each plot type in its own loop so it can be copy pasted
     dfs = []
     for f in folders:
-        dfs.append(pd.read_pickle(os.path.join(f, f + '.df')))
+        df_path = os.path.join(f, f + '.df')
+        dfs.append(pd.read_pickle(df_path))
+        print('Loaded {} into memory'.format(df_path))
     df = pd.concat(dfs)
 
     # Make nice subplots of each scan (that has aspect ratio close to 1)
     are_scans = df['type'] == 'xy'
-    in_folders =  df['folder'].isin(folders)
-    for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
+    # Not needed anymore, we don't load data that is not in folders of interest
+    #in_folders =  df['folder'].isin(folders)
+    for folder, folderdata in df[are_scans].groupby('folder'):
         plotfolder = os.path.join(folder, 'topo_current_subplots')
         if not os.path.isdir(plotfolder):
             os.makedirs(plotfolder)
@@ -226,7 +229,7 @@ if __name__ == '__main__':
                 plt.close(fig2)
 
     # Scatter height vs current
-    for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
+    for folder, folderdata in df[are_scans].groupby('folder'):
         scatterfolder = os.path.join(folder, 'topo_current_scatter')
         if not os.path.isdir(scatterfolder):
             os.makedirs(scatterfolder)
@@ -252,7 +255,7 @@ if __name__ == '__main__':
     # Not that useful
     '''
     # Forward vs backward scans
-    for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
+    for folder, folderdata in df[are_scans].groupby('folder'):
         topo_dir = os.path.join(folder, 'forward_vs_backward_topo')
         current_dir = os.path.join(folder, 'forward_vs_backward_current')
         if not os.path.isdir(topo_dir):
@@ -320,7 +323,7 @@ if __name__ == '__main__':
     '''
 
     # hexbin height vs current
-    for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
+    for folder, folderdata in df[are_scans].groupby('folder'):
         scatterfolder = os.path.join(folder, 'topo_current_hexbin')
         if not os.path.isdir(scatterfolder):
             os.makedirs(scatterfolder)
@@ -345,7 +348,7 @@ if __name__ == '__main__':
 
     # Histograms of current
     # Make nice subplots of each scan (that has aspect ratio close to 1)
-    for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
+    for folder, folderdata in df[are_scans].groupby('folder'):
         plotfolder = os.path.join(folder, 'topo_current_histograms')
         if not os.path.isdir(plotfolder):
             os.makedirs(plotfolder)
@@ -363,7 +366,7 @@ if __name__ == '__main__':
 
     # Polar plot gradient vs current
     # These take a long time for some reason
-    for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
+    for folder, folderdata in df[are_scans].groupby('folder'):
         scatterfolder = os.path.join(folder, 'gradient_current_polarscatter')
         if not os.path.isdir(scatterfolder):
             os.makedirs(scatterfolder)
@@ -389,12 +392,12 @@ if __name__ == '__main__':
     # Might be useful to annotate each region with the measurement id
     # If you want, you can make a plot for every scan that shows only the previous and next scan areas with low opacity
     from matplotlib import patches
-    for folder, folderdata in df[are_scans & in_folders].groupby('folder'):
+    for folder, folderdata in df.groupby('folder'):
         regionsfolder = os.path.join(folder, 'scan_regions')
         if not os.path.isdir(regionsfolder):
             os.makedirs(regionsfolder)
         topo = folderdata[folderdata.channel_name == 'Z']
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(8,8))
         miny = 1e6 * np.min(topo.y_offset)
         minx = 1e6 * np.min(topo.x_offset)
         maxx = 1e6 * np.max(topo.x_offset + topo.width)
@@ -414,13 +417,27 @@ if __name__ == '__main__':
         ax.set_title('Scan areas for {}'.format(folder))
 
         # Also put in points where IV measurements were taken
-        iv = folderdata[folderdata.type == 'iv']
-        x = iv['x_offset']
-        y = iv['y_offset']
-        ax.scatter(x, y, alpha=1, edgecolor='none')
+        scan1d = folderdata[folderdata['type'].isin(['iv', 'iz'])]
+        x = scan1d['x_offset']
+        y = scan1d['y_offset']
+        ax.scatter(x, y, alpha=1, edgecolor='none', c='black', s=15, zorder=0)
         # Save to folder
         savepath = os.path.join(regionsfolder, '{}_all_scan_regions.png'.format(folder))
         fig.savefig(savepath, bbox_inches=0)
-        print('Wrote {}.png'.format(savepath))
+        print('Wrote {}'.format(savepath))
+
+        # Write spreadsheet of xy scan locations
+        savepath = os.path.join(regionsfolder, '{}_all_xy_scan_regions.xls'.format(folder))
+        xy_regions = folderdata[folderdata['type'] == 'xy'][['folder', 'filename', 'mystery_id', 'run', 'cycle', 'x_offset', 'y_offset', 'width', 'height']].sort_values(by=['mystery_id', 'run', 'cycle'])
+        xy_regions.to_excel(savepath, index=False)
+        print('Wrote {}'.format(savepath))
+
+        # Write spreadsheet of iv/iz scan locations
+        savepath = os.path.join(regionsfolder, '{}_all_iv_iz_scan_regions.xls'.format(folder))
+        xy_regions = folderdata[folderdata['type'].isin(['iv', 'iz'])][['folder', 'filename', 'mystery_id', 'run', 'cycle', 'type', 'x_offset', 'y_offset']].sort_values(by=['mystery_id', 'run', 'cycle'])
+        xy_regions.to_excel(savepath, index=False)
+        print('Wrote {}'.format(savepath))
+
+
 
 
