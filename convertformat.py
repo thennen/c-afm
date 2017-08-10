@@ -8,8 +8,11 @@ import sys
 from numpy import savetxt
 import numpy as np
 import matplotlib
+# For some reason qt5 does not work ('figure' is an unknown keyword argument)
 matplotlib.use('Qt4Agg')
+#matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+plt.switch_backend('Qt4Agg')
 import pickle
 import pandas as pd
 import time
@@ -56,18 +59,29 @@ def getdata(fn, folder='', raw=False):
         if (xchannel == 'Spectroscopy Device 1') and (ychannel == 'I(V)'):
             dataout['type'] = 'iv'
             dataout['V'] = datain['data'][0]
+            xoff, yoff = datain['referenced_by']['Location (m)']
+            dataout['I'] = datain['data'][1]
+            dataout['x_offset'] = xoff
+            dataout['y_offset'] = yoff
         elif (xchannel == 'Spectroscopy Device 2') and (ychannel == 'I(Z)'):
             dataout['type'] = 'iz'
             dataout['Z'] = datain['data'][0]
+            dataout['I'] = datain['data'][1]
+            xoff, yoff = datain['referenced_by']['Location (m)']
+            dataout['x_offset'] = xoff
+            dataout['y_offset'] = yoff
+        elif (xchannel == 'Spectroscopy Device 2') and (ychannel == 'FCFn-Fn0(Z)'):
+            dataout['type'] = 'fz'
+            dataout['Z'] = datain['data'][0]
+            dataout['F'] = datain['data'][1]
+            # File doesn't have this data.  Make the dictionary items for consistency
+            dataout['x_offset'] = np.nan
+            dataout['y_offset'] = np.nan
         else:
             dataout['type'] = 'mysteryscan'
             dataout['mysteryarray'] = datain['data'][0]
-        xoff, yoff = datain['referenced_by']['Location (m)']
         dataout['xunit'] = xunit
         dataout['yunit'] = yunit
-        dataout['x_offset'] = xoff
-        dataout['y_offset'] = yoff
-        dataout['I'] = datain['data'][1]
         if 'retrace' in traces.values():
             # There is a retrace.  I don't think there is separate metadata
             retrace, message = mtrx_data.select_curve('retrace')
@@ -76,6 +90,8 @@ def getdata(fn, folder='', raw=False):
                 dataout['V2'] = datain2['data'][0]
             elif dataout['type'] == 'iz':
                 dataout['Z2'] = datain2['data'][0]
+            elif dataout['type'] == 'fz':
+                dataout['F2'] = datain2['data'][0]
             else:
                 dataout['mysteryarray'] = datain2['data'][0]
             dataout['I2'] = datain2['data'][1]
@@ -148,7 +164,6 @@ if __name__ == '__main__':
                 if fn.endswith('mtrx'): return True
             return False
         folders = [f for f in folders if anydata(f)]
-    #folder = '01-Jun-2017'
 
     for folder in folders:
         # Load all the data from the folders
@@ -209,14 +224,16 @@ if __name__ == '__main__':
             for d in data.values():
                 txtname = d['filename'] + '.txt'
                 txtpath = os.path.join(csvfolder, txtname)
-                if d['type'] == 'xy' and txt_2d:
+                types2d = ['xy']
+                types1d = ['iv', 'iz', 'fz']
+                if (d['type'] in types2d) and txt_2d:
                     savekeys = ['filename', 'channel_name', 'channel_unit', 'angle', 'height', 'width', 'x_offset', 'y_offset', 'voltage']
                     header = '\n'.join(['{}: {}'.format(k, d[k]) for k in savekeys])
                     # Files have very strange extensions.  Just keep them there.
                     savetxt(txtpath, d['scan'], header=header, delimiter='\t')
                     # Not writing the second scan unless someone starts screaming
                     print('Wrote {}'.format(txtpath))
-                elif ((d['type'] == 'iv') or (d['type'] == 'iz')) and txt_1d:
+                elif (d['type'] in types1d) and txt_1d:
                     savekeys = ['filename', 'x_offset', 'y_offset']
                     header = '\n'.join(['{}: {}'.format(k, d[k]) for k in savekeys])
                     if d['type'] == 'iv':
@@ -233,6 +250,13 @@ if __name__ == '__main__':
                         else:
                             header += '\ncolumns: Z\tI'
                             table = np.vstack((d['Z'], d['I'])).T
+                    if d['type'] == 'fz':
+                        if 'F2' in d.keys():
+                            header += '\ncolumns: Z1\tF1\tZ2\tF2'
+                            table = np.vstack((d['Z'], d['F'], d['Z2'], d['F2'])).T
+                        else:
+                            header += '\ncolumns: Z\tF'
+                            table = np.vstack((d['Z'], d['F'])).T
                     savetxt(txtpath, table, header=header, delimiter='\t')
                     print('Wrote {}'.format(txtpath))
 
@@ -249,11 +273,10 @@ if __name__ == '__main__':
             for d in data.values():
                 pngname = d['filename'] + '.png'
                 pngpath = os.path.join(pngfolder, pngname)
-                if d['type'] == 'xy' and np.shape(d['scan'])[1] > 0:
+                if (d['type'] == 'xy') and np.shape(d['scan'])[1] > 0:
                     # Files have very strange extensions.  Just keep them there.
                     figname = d['filename'] + '.plt'
                     #figpath = os.path.join(figfolder, figname)
-
                     fig, ax = plt.subplots()
                     left = 0
                     right = d['width'] * 1e9
@@ -267,40 +290,53 @@ if __name__ == '__main__':
                         with open(figpath, 'wb') as f:
                             pickle.dump(fig, f)
                             print('Wrote {}'.format(figpath))
+                    fig.savefig(pngpath, bbox_inches=0)
+                    print('Wrote {}'.format(pngpath))
 
             # Also write the 1D scans
-            pngfolder = os.path.join(folder, 'raw_iv_iz_scans_png')
+            pngfolder = os.path.join(folder, 'raw_1D_scans_png')
             if not os.path.isdir(pngfolder):
                 os.makedirs(pngfolder)
             for d in data.values():
                 pngname = d['filename'] + '.png'
                 pngpath = os.path.join(pngfolder, pngname)
-                if d['type'] == 'iv':
-                    # make IV plot
+                if d['type'] in types1d:
                     fig, ax = plt.subplots()
-                    ax.plot(d['V'], 1e9 * d['I'])
-                    if 'V2' in d.keys():
-                        ax.plot(d['V2'], 1e9 * d['I2'])
-                    ax.set_xlabel('Voltage [V]')
-                    ax.set_ylabel('Current [nA]')
-                    x, y = d['x_offset'], d['y_offset']
-                    ax.set_title('Location: {} nm, {} nm'.format(x * 1e9, y * 1e9))
-                    ax.legend(['Up', 'Down'], title='Sweep direction', loc=0)
-                elif d['type'] == 'iz':
-                    # make IZ plot
-                    fig, ax = plt.subplots()
-                    ax.plot(1e9 * d['Z'], 1e9 * d['I'])
-                    if 'Z2' in d.keys():
-                        ax.plot(1e9 * d['Z2'], 1e9 * d['I2'])
-                    ax.set_xlabel('Z [nm]')
-                    ax.set_ylabel('Current [nA]')
-                    x, y = d['x_offset'], d['y_offset']
-                    ax.set_title('Location: {} nm, {} nm'.format(x * 1e9, y * 1e9))
-                    # Could be reversed
-                    ax.legend(['Down', 'Up'], title='Scan direction', loc=0)
-                fig.savefig(pngpath, bbox_inches=0)
-                print('Wrote {}'.format(pngpath))
-                plt.close(fig)
+                    if d['type'] == 'iv':
+                        # make IV plot
+                        ax.plot(d['V'], 1e9 * d['I'])
+                        if 'V2' in d.keys():
+                            ax.plot(d['V2'], 1e9 * d['I2'])
+                        ax.set_xlabel('Voltage [V]')
+                        ax.set_ylabel('Current [nA]')
+                        x, y = d['x_offset'], d['y_offset']
+                        ax.set_title('Location: {} nm, {} nm'.format(x * 1e9, y * 1e9))
+                        ax.legend(['Up', 'Down'], title='Sweep direction', loc=0)
+                    elif d['type'] == 'iz':
+                        # make IZ plot
+                        ax.plot(1e9 * d['Z'], 1e9 * d['I'])
+                        if 'Z2' in d.keys():
+                            ax.plot(1e9 * d['Z2'], 1e9 * d['I2'])
+                        ax.set_xlabel('Z [nm]')
+                        ax.set_ylabel('Current [nA]')
+                        x, y = d['x_offset'], d['y_offset']
+                        ax.set_title('Location: {} nm, {} nm'.format(x * 1e9, y * 1e9))
+                        # Could be reversed
+                        ax.legend(['Down', 'Up'], title='Scan direction', loc=0)
+                    elif d['type'] == 'fz':
+                        # make IZ plot
+                        ax.plot(1e9 * d['Z'], 1e9 * d['F'])
+                        if 'F2' in d.keys():
+                            ax.plot(1e9 * d['Z2'], 1e9 * d['F2'])
+                        ax.set_xlabel('Z [nm]')
+                        ax.set_ylabel('F [nN?]')
+                        #x, y = d['x_offset'], d['y_offset']
+                        #ax.set_title('Location: {} nm, {} nm'.format(x * 1e9, y * 1e9))
+                        # Could be reversed
+                        ax.legend(['Down', 'Up'], title='Scan direction', loc=0)
+                    fig.savefig(pngpath, bbox_inches=0)
+                    print('Wrote {}'.format(pngpath))
+                    plt.close(fig)
 
     ## This was a bad idea ..
     # When done, put dataframe containing all of the data into
