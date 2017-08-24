@@ -75,10 +75,15 @@ def plot_cafm(data, n=1):
     I = data[data['channel_name'] == 'I'].iloc[0]
     Z = data[data['channel_name'] == 'Z'].iloc[0]
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(22.5,8))
-    left = 0
-    right = I['width'] * 1e9
-    bottom = 0
-    top = I['height'] * 1e9
+    # This is not the way the afm program plots it
+    #left = 0
+    #right = I['width'] * 1e9
+    #bottom = 0
+    #top = I['height'] * 1e9
+    left = - I['width'] * 1e9 / 2
+    right = I['width'] * 1e9 / 2
+    bottom = -I['height'] * 1e9 / 2
+    top = I['height'] * 1e9 / 2
     if n==1:
         Idata = I['scan']
         Zdata = Z['corrscan']
@@ -166,13 +171,14 @@ def plot_cafm_hist(data):
     # Correct the Z data
     # Make height histogram
     p1, p99 = np.percentile(Zdata, (0.2, 99.8))
-    hist1 = ax1.hist(Zdata.flatten(), bins='auto', range=(p1, p99), color='ForestGreen')
+    # bins = 'auto' sometimes results in an insane number of bins and the program hangs while it fills up your memory completely
+    hist1 = ax1.hist(Zdata.flatten(), bins='scott', range=(p1, p99), color='ForestGreen')
     ax1.set_xlabel('Height [nm]')
     ax1.set_ylabel('Pixel Count')
     ax1.set_title('Sample: {},  Folder: {},  id: {}'.format(I['sample_name'], I['folder'], I['id']))
     # Make current histogram
-    p1, p99 = np.percentile(Idata, (0.2, 99.8))
-    hist2 = ax2.hist(Idata.flatten(), bins='auto', range=(p1, p99), color='Crimson')
+    p1, p99 = np.percentile(Idata, (0.2, 99))
+    hist2 = ax2.hist(Idata.flatten(), bins='scott', range=(p1, p99), color='Crimson')
     ax2.set_title('Tip voltage: {} V'.format(I['voltage']))
     ax2.set_xlabel('Current [nA]')
     ax2.set_ylabel('Pixel Count')

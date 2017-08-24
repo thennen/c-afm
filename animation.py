@@ -5,7 +5,29 @@ import os
 import sys
 from mayavi import mlab
 
-df = pd.read_pickle('all_lcafm_data.pd')
+# You can pass a set of folders to analyze, or else the script will do them all
+if len(sys.argv) > 1:
+    folders = sys.argv[1:]
+else:
+    folders = os.listdir(sys.path[0])
+    folders = [f for f in folders if os.path.isdir(f)]
+    # Don't touch folders that have no data files inside of them ...
+    def anydata(folder):
+        dirlist = os.listdir(folder)
+        for fn in dirlist:
+            if fn.endswith('mtrx'): return True
+        return False
+    folders = [f for f in folders if anydata(f)]
+
+# Construct single dataframe from all the dataframes in the folders
+# This happens to be less work at the moment
+# Also allows me to write each plot type in its own loop so it can be copy pasted
+dfs = []
+for f in folders:
+    df_path = os.path.join(f, f + '.df')
+    dfs.append(pd.read_pickle(df_path))
+    print('Loaded {} into memory'.format(df_path))
+df = pd.concat(dfs)
 
 def frames_to_mp4(directory, prefix='Loop', outname='out'):
     # Send command to create video with ffmpeg
@@ -141,9 +163,9 @@ if __name__ == '__main__':
                 # This gives each scan its own folder and is annoying
                 #animdir = os.path.join(folder, 'animations', '{}_warpscale_2'.format(id))
                 animdir = os.path.join(folder, '3D_rotations')
-                rotatingvideo(Zseries, column='corrscan', fnprefix=id ,fnsuffix='Forward', nrotations=27, folder=animdir, color=Idata, vmin=vmin, vmax=vmax, warpscale=2, overwrite=False)
+                rotatingvideo(Zseries, column='corrscan', fnprefix=id ,fnsuffix='Forward', nrotations=12, folder=animdir, color=Idata, vmin=vmin, vmax=vmax, warpscale=30, overwrite=False)
                 #frames_to_mp4(animdir, 'Forward')
 
                 # Also write the reverse scan for comparison
-                Idata_r = data[data['channel_name'] == 'I'].iloc[0]['scan2']
-                rotatingvideo(Zseries, column='corrscan2', fnprefix=id, fnsuffix='Reverse', nrotations=27, folder=animdir, color=Idata_r, warpscale=2, overwrite=False)
+                #Idata_r = data[data['channel_name'] == 'I'].iloc[0]['scan2']
+                #rotatingvideo(Zseries, column='corrscan2', fnprefix=id, fnsuffix='Reverse', nrotations=27, folder=animdir, color=Idata_r, warpscale=2, overwrite=False)

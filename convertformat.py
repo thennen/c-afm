@@ -278,10 +278,15 @@ if __name__ == '__main__':
                     figname = d['filename'] + '.plt'
                     #figpath = os.path.join(figfolder, figname)
                     fig, ax = plt.subplots()
-                    left = 0
-                    right = d['width'] * 1e9
-                    bottom = 0
-                    top = d['height'] * 1e9
+                    # This way is not the same as AFM program
+                    #left = 0
+                    #right = d['width'] * 1e9
+                    #bottom = 0
+                    #top = d['height'] * 1e9
+                    left = - d['width'] * 1e9 / 2
+                    right = d['width'] * 1e9 / 2
+                    bottom = -d['height'] * 1e9 / 2
+                    top = d['height'] * 1e9 / 2
                     im = ax.imshow(1e9 * d['scan'], cmap='viridis', extent=(left, right, bottom, top))
                     ax.set_xlabel('X [nm]')
                     ax.set_ylabel('Y [nm]')
