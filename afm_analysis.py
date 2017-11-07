@@ -3,10 +3,13 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import os
 import sys
+import scipy
 
 # Not storing all the data in one file anymore
 #df = pd.read_pickle('all_lcafm_data.pd')
 
+# fitplane below for some reason does not do a perfect job every time
+'''
 def fitplane(Z):
     # Plane Regression -- basically took this from online somewhere
     # probably I messed up the dimensions as usual
@@ -18,6 +21,24 @@ def fitplane(Z):
     theta = np.dot(np.dot(np.linalg.pinv(np.dot(XX.transpose(), XX)), XX.transpose()), ZZ)
     plane = np.reshape(np.dot(XX, theta), (m, n))
     return plane
+'''
+# Idea from https://gist.github.com/amroamroamro/1db8d69b4b65e8bc66a6
+def fitplane(Z, X=None, Y=None, returncoeffs=False):
+    ''' Z is 2D, can optionally pass x, y 2d arrays, if you don't want to use default meshgrid'''
+    # Can easily be extended to X, Y, Z data that is not on a regular grid!
+    m, n = np.shape(Z)
+    if X is None:
+        X, Y = np.meshgrid(np.arange(m), np.arange(n), indexing='ij')
+    XX = X.flatten()
+    YY = Y.flatten()
+    ZZ = Z.flatten()
+    A = np.c_[XX, YY, np.ones(len(XX))]
+    C,_,_,_ = scipy.linalg.lstsq(A, ZZ)
+    if returncoeffs:
+        return C
+    else:
+        plane = C[0] * X + C[1] * Y + C[2]
+        return plane
 
 
 # Should now be saved this way already
@@ -65,7 +86,7 @@ for k,g in df.groupby('filename'):
             plt.savefig(k)
 '''
 
-def plot_cafm(data, n=1):
+def plot_cafm(data, n=1, scaleaxes=True):
     # Data should be a dataframe with one of type 'I' and one of type 'Z'
     # This makes a plot of topography next to current
     topo_cm = 'viridis'
@@ -90,11 +111,13 @@ def plot_cafm(data, n=1):
     elif n==2:
         Idata = I['scan2']
         Zdata = Z['corrscan2']
+    if scaleaxes:
+        extent = (left, right, bottom, top)
+    else:
+        extent = None
     # Plot topography image
     p1, p99 = np.percentile(Zdata, (0.2, 99.8))
-    im1 = ax1.imshow(Zdata, cmap=topo_cm, vmin=p1, vmax=p99, extent=(left, right, bottom, top))
-    ax1.set_xlabel('X [nm]')
-    ax1.set_ylabel('Y [nm]')
+    im1 = ax1.imshow(Zdata, cmap=topo_cm, vmin=p1, vmax=p99, extent=extent)
     ax1.invert_yaxis()
     title = 'Sample: {},  Folder: {},  id: {}'.format(I['sample_name'], I['folder'], I['id'])
     if n == 2:
@@ -106,9 +129,17 @@ def plot_cafm(data, n=1):
     # Plot current image
     Idata
     p1, p99 = np.percentile(1e9 * Idata, (0.2, 99.8))
-    im2 = ax2.imshow(1e9 * Idata, cmap=current_cm, vmin=p1, vmax=p99, extent=(left, right, bottom, top))
-    ax2.set_xlabel('X [nm]')
-    ax2.set_ylabel('Y [nm]')
+    im2 = ax2.imshow(1e9 * Idata, cmap=current_cm, vmin=p1, vmax=p99, extent=extent)
+    if scaleaxes:
+        ax2.set_xlabel('X [nm]')
+        ax2.set_ylabel('Y [nm]')
+        ax1.set_xlabel('X [nm]')
+        ax1.set_ylabel('Y [nm]')
+    else:
+        ax2.set_xlabel('X [pixels]')
+        ax2.set_ylabel('Y [pixels]')
+        ax1.set_xlabel('X [pixels]')
+        ax1.set_ylabel('Y [pixels]')
     ax2.invert_yaxis()
     fig.colorbar(im2, ax=ax2, label='Current [nA]')
     return fig
