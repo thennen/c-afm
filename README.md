@@ -1,5 +1,5 @@
 # c-afm
-Some sprawling code for data processing and analysis of conducting afm images
+Some code for data processing and analysis of conducting afm images
 
 Produces [this kind of video.](https://www.youtube.com/watch?v=9WEOLkMTRJE)
 
